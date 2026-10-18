@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Photo Punch Game</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Rubik+Glitch&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Jua', sans-serif;
+        }
+        .glitch-font {
+            font-family: 'Rubik Glitch', cursive;
+        }
+        /* Extreme Impact Shake */
+        @keyframes superShake {
+            0% { transform: translate(0, 0) rotate(0deg) scale(1); }
+            15% { transform: translate(-18px, 12px) rotate(-6deg) scale(0.96); }
+            30% { transform: translate(18px, -12px) rotate(6deg) scale(1.04); }
+            45% { transform: translate(-12px, -10px) rotate(-3deg) scale(0.98); }
+            60% { transform: translate(12px, 10px) rotate(3deg) scale(1.02); }
+            75% { transform: translate(-6px, 4px) rotate(-1deg) scale(1); }
+            100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+        }
+        .animate-super-shake {
+            animation: superShake 0.22s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        /* Floating Damage Text */
+        @keyframes floatDamage {
+            0% { opacity: 1; transform: translateY(0) scale(0.8) rotate(-10deg); }
+            30% { opacity: 1; transform: translateY(-40px) scale(1.5) rotate(5deg); }
+            100% { opacity: 0; transform: translateY(-110px) scale(1.8) rotate(20deg); }
+        }
+        .floating-damage {
+            animation: floatDamage 0.55s ease-out forwards;
+            pointer-events: none;
+        }
+
+        /* Hit Mark Spark Particle */
+        @keyframes particleBurst {
+            0% { opacity: 1; transform: translate(0, 0) scale(1); }
+            100% { opacity: 0; transform: translate(var(--tw-translate-x), var(--tw-translate-y)) scale(0); }
+        }
+        .particle {
+            animation: particleBurst 0.45s ease-out forwards;
+            pointer-events: none;
+        }
+
+        /* Photo Deformation Distortion Effect */
+        .distorted {
+            filter: contrast(150%) hue-rotate(-20deg) saturate(200%);
+            transform: scale(0.94) skewX(4deg) skewY(-2deg);
+        }
+    </style>
+</head>
+<body id="game-body" class="bg-gradient-to-br from-gray-950 via-slate-900 to-red-950 text-white min-h-screen flex flex-col items-center justify-between p-3 select-none overflow-hidden">
+
+    <!-- Top UI Header -->
+    <header class="w-full max-w-md flex flex-col items-center pt-2 z-20">
+        <div class="flex items-center justify-between w-full px-4 mb-2">
+            <!-- Sound Toggle -->
+            <button id="sound-btn" onclick="toggleSound()" class="px-3 py-1.5 bg-zinc-800/80 border border-zinc-700 rounded-lg text-xs font-bold text-zinc-300 hover:bg-zinc-700 flex items-center gap-1">
+                <span id="sound-icon">🔊</span> 사운드 ON
+            </button>
+            
+            <!-- High Score -->
+            <div class="text-right">
+                <span class="text-xs text-amber-400 font-bold tracking-wider">HIGH SCORE</span>
+                <p id="high-score" class="text-xl font-black text-amber-300">0</p>
+            </div>
+        </div>
+
+        <!-- Main Score Dashboard -->
+        <div class="flex justify-around items-center w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-3 shadow-2xl backdrop-blur-md">
+            <div class="text-center">
+                <p class="text-xs text-red-400 font-semibold">TOTAL HITS</p>
+                <h1 id="score-display" class="text-4xl font-black text-yellow-400 drop-shadow">0</h1>
+            </div>
+            <div class="h-8 w-px bg-zinc-700"></div>
+            <div class="text-center">
+                <p class="text-xs text-orange-400 font-semibold">COMBO</p>
+                <h2 id="combo-display" class="text-3xl font-black text-orange-500 drop-shadow">0x</h2>
+            </div>
+            <div class="h-8 w-px bg-zinc-700"></div>
+            <div class="text-center">
+                <p class="text-xs text-rose-400 font-semibold">DAMAGE LEVEL</p>
+                <h3 id="damage-level" class="text-xl font-bold text-rose-300">LV.0</h3>
+            </div>
+        </div>
+
+        <!-- Status / Rank Banner -->
+        <div id="status-banner" class="mt-2 bg-red-950/60 border border-red-800/60 px-4 py-1 rounded-full text-xs font-bold text-red-300 shadow">
+            💥 클릭/터치하여 타격을 시작하세요!
+        </div>
+    </header>
+
+    <!-- Center Photo Target Area -->
+    <main class="relative flex items-center justify-center flex-grow w-full max-w-md my-2">
+        <!-- Target Frame Container -->
+        <div id="target-wrapper" class="relative cursor-pointer group active:scale-95 transition-transform duration-75" onclick="hitTarget(event)">
+            
+            <!-- Outer Glow Aura -->
+            <div id="aura-glow" class="absolute -inset-2 bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 rounded-3xl opacity-30 blur-xl transition-all duration-300"></div>
+
+            <!-- Main Photo Display Canvas / Img Box -->
+            <div class="relative w-64 h-80 sm:w-72 sm:h-96 bg-zinc-900 rounded-2xl overflow-hidden border-4 border-zinc-700 shadow-2xl flex items-center justify-center">
+                
+                <!-- Target Image Display -->
+                <img id="target-image" src="image_cbb99b.jpg" alt="Target" class="w-full h-full object-cover pointer-events-none transition-all duration-75" onerror="useFallbackImage()">
+                
+                <!-- Dynamic Hit Flash Overlay -->
+                <div id="hit-flash" class="absolute inset-0 bg-red-600/40 opacity-0 pointer-events-none transition-opacity duration-75 mix-blend-hard-light"></div>
+                
+                <!-- Bruise & Damage Canvas Overlay -->
+                <canvas id="damage-canvas" class="absolute inset-0 w-full h-full pointer-events-none mix-blend-multiply opacity-80"></canvas>
+
+                <!-- Hit Effect Mark Emoji overlay on contact -->
+                <div id="hit-mark" class="absolute pointer-events-none opacity-0 text-5xl transform -translate-x-1/2 -translate-y-1/2 transition-opacity duration-100">
+                    💥
+                </div>
+
+                <!-- Stage Watermark -->
+                <div class="absolute bottom-2 right-2 bg-black/60 px-2 py-0.5 rounded text-[10px] text-zinc-400 border border-zinc-800">
+                    STAGE: <span id="stage-text" class="text-yellow-400 font-bold">NORMAL</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Damage / FX Container -->
+        <div id="fx-container" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+    </main>
+
+    <!-- Bottom Controls & Custom Image Instructions -->
+    <footer class="w-full max-w-md flex flex-col items-center pb-2 z-20 gap-2">
+        <div class="flex gap-2 w-full">
+            <button onclick="resetGame()" class="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 font-bold rounded-xl text-xs border border-zinc-700 transition">
+                🔄 점수 & 상처 초기화
+            </button>
+            <button onclick="toggleHelpModal()" class="px-3 py-2.5 bg-zinc-800 hover:bg-zinc-700 active:scale-95 text-zinc-300 font-bold rounded-xl text-xs border border-zinc-700 transition">
+                🖼️ 커스텀 이미지 설정법
+            </button>
+        </div>
+    </footer>
+
+    <!-- Help Modal for Custom Multi-Images -->
+    <div id="help-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 max-w-md w-full text-zinc-200 text-sm space-y-3">
+            <h3 class="text-lg font-bold text-yellow-400 flex justify-between items-center">
+                🖼️ 이미지 단계별 교체 설정 방법
+                <button onclick="toggleHelpModal()" class="text-zinc-400 hover:text-white text-xl">&times;</button>
+            </h3>
+            <p class="text-xs text-zinc-400">자신만의 이미지 파일들을 준비하여 때릴 때마다 완전히 다른 표정으로 바뀌게 만들 수 있습니다.</p>
+            <div class="bg-zinc-950 p-3 rounded-lg border border-zinc-800 text-xs space-y-2">
+                <p><span class="text-emerald-400 font-bold">1단계 (기본 사진):</span> `target_normal.jpg` (기본 얼굴)</p>
+                <p><span class="text-amber-400 font-bold">2단계 (타격 모션):</span> `target_hit.jpg` (맞는 순간 표정)</p>
+                <p><span class="text-rose-400 font-bold">3단계 (상처 표정):</span> `target_damaged.jpg` (피해 입은 표정)</p>
+            </div>
+            <p class="text-xs text-zinc-400">사진 파일들을 `index.html`과 같은 폴더에 넣어두면 자동으로 인식되어 타격 시 변환됩니다! (파일이 없는 경우 자동 멍/왜곡 효과가 적용됩니다)</p>
+            <button onclick="toggleHelpModal()" class="w-full py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg text-xs">확인 완료</button>
+        </div>
+    </div>
+
+    <!-- Logic Script -->
+    <script>
+        let score = 0;
+        let combo = 0;
+        let highScore = localStorage.getItem('punch_game_highscore') || 0;
+        let comboTimeout = null;
+        let soundEnabled = true;
+        let audioCtx = null;
+        let hitTimer = null;
+
+        // Custom Multi-Image File Support Config
+        const customImages = {
+            normal: 'image_cbb99b.jpg', // Default initial photo
+            hit: 'target_hit.jpg',        // Flash image on punch contact
+            damaged: 'target_damaged.jpg' // High damage image state
+        };
+
+        let hasCustomHitImage = false;
+        let hasCustomDamagedImage = false;
+
+        // Preload and test if custom image files exist
+        function checkCustomImages() {
+            const imgHit = new Image();
+            imgHit.src = customImages.hit;
+            imgHit.onload = () => { hasCustomHitImage = true; };
+
+            const imgDamaged = new Image();
+            imgDamaged.src = customImages.damaged;
+            imgDamaged.onload = () => { hasCustomDamagedImage = true; };
+        }
+
+        window.onload = () => {
+            document.getElementById('high-score').innerText = highScore;
+            initCanvas();
+            checkCustomImages();
+        };
+
+        // Canvas Setup for Dynamic Bruises/Cuts
+        let canvas, ctx;
+        function initCanvas() {
+            canvas = document.getElementById('damage-canvas');
+            const targetImg = document.getElementById('target-image');
+            canvas.width = targetImg.clientWidth || 300;
+            canvas.height = targetImg.clientHeight || 400;
+            ctx = canvas.getContext('2d');
+        }
+
+        // Web Audio Synthesizer for Dynamic Punch Sound
+        function playPunchSound() {
+            if (!soundEnabled) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const now = audioCtx.currentTime;
+
+                // Low Frequency Bass Impact
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220 + Math.random() * 40, now);
+                osc.frequency.exponentialRampToValueAtTime ? osc.frequency.exponentialRampToValueAtTime(25, now + 0.12) : osc.frequency.linearRampToValueAtTime(25, now + 0.12);
+
+                gain.gain.setValueAtTime(1.0, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.12);
+
+                // High Crack Slap Noise
+                const bufSize = audioCtx.sampleRate * 0.06;
+                const buffer = audioCtx.createBuffer(1, bufSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.25));
+                }
+                const noise = audioCtx.createBufferSource();
+                noise.buffer = buffer;
+                const noiseGain = audioCtx.createGain();
+                noiseGain.gain.setValueAtTime(0.7, now);
+                noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+
+                noise.connect(noiseGain);
+                noiseGain.connect(audioCtx.destination);
+                noise.start(now);
+                noise.stop(now + 0.06);
+            } catch (e) {}
+        }
+
+        // Main Hit Handler
+        function hitTarget(event) {
+            score++;
+            combo++;
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('punch_game_highscore', highScore);
+                document.getElementById('high-score').innerText = highScore;
+            }
+
+            clearTimeout(comboTimeout);
+            comboTimeout = setTimeout(() => {
+                combo = 0;
+                updateUI();
+            }, 1400);
+
+            updateUI();
+            playPunchSound();
+            animateTargetHit(event);
+            drawDynamicBruise(event);
+            spawnFX(event);
+        }
+
+        // Image State Switching & Distortions on Hit
+        function animateTargetHit(event) {
+            const targetImg = document.getElementById('target-image');
+            const wrapper = document.getElementById('target-wrapper');
+            const hitFlash = document.getElementById('hit-flash');
+            const hitMark = document.getElementById('hit-mark');
+
+            // 1. Shake animation
+            wrapper.classList.remove('animate-super-shake');
+            void wrapper.offsetWidth;
+            wrapper.classList.add('animate-super-shake');
+
+            // 2. Red Flash Overlay
+            hitFlash.style.opacity = '0.8';
+            setTimeout(() => { hitFlash.style.opacity = '0'; }, 100);
+
+            // 3. Switch Image to HIT State (If image file exists or fallback CSS distortion)
+            clearTimeout(hitTimer);
+            if (hasCustomHitImage) {
+                targetImg.src = customImages.hit;
+            } else {
+                targetImg.classList.add('distorted');
+            }
+
+            // 4. Hit Mark Emojis on touch spot
+            if (event && event.clientX) {
+                const rect = wrapper.getBoundingClientRect();
+                const x = event.clientX - rect.left;
+                const y = event.clientY - rect.top;
+                hitMark.style.left = `${x}px`;
+                hitMark.style.top = `${y}px`;
+                hitMark.style.opacity = '1';
+                setTimeout(() => { hitMark.style.opacity = '0'; }, 120);
+            }
+
+            // Return Image to NORMAL or DAMAGED State after impact
+            hitTimer = setTimeout(() => {
+                targetImg.classList.remove('distorted');
+                if (score >= 50 && hasCustomDamagedImage) {
+                    targetImg.src = customImages.damaged;
+                } else {
+                    targetImg.src = customImages.normal;
+                }
+            }, 150);
+        }
+
+        // Draw Bruises / Splatter on Photo Canvas
+        function drawDynamicBruise(event) {
+            if (!ctx || !event || !event.clientX) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (event.clientX - rect.left) * (canvas.width / rect.width);
+            const y = (event.clientY - rect.top) * (canvas.height / rect.height);
+
+            // Bruise Spot (Purplish Red Gradient)
+            const radius = 15 + Math.random() * 20;
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+            grad.addColorStop(0, 'rgba(120, 0, 40, 0.55)');
+            grad.addColorStop(0.6, 'rgba(60, 0, 60, 0.3)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Floating Damage Number & Sparks
+        function spawnFX(event) {
+            const fxContainer = document.getElementById('fx-container');
+            const rect = fxContainer.getBoundingClientRect();
+            
+            const x = event && event.clientX ? event.clientX - rect.left : rect.width / 2;
+            const y = event && event.clientY ? event.clientY - rect.top : rect.height / 2;
+
+            // Floating Text
+            const dmg = document.createElement('div');
+            dmg.className = 'absolute floating-damage font-black text-3xl sm:text-4xl text-yellow-300 drop-shadow-[0_4px_8px_rgba(220,38,38,1)]';
+            const hitWords = ["CRITICAL!", "BOOM!", "POW!", "+1", "HIT!", "SMASH!"];
+            dmg.innerText = combo > 8 ? hitWords[Math.floor(Math.random() * hitWords.length)] : "+1";
+            dmg.style.left = `${x - 20}px`;
+            dmg.style.top = `${y - 20}px`;
+            fxContainer.appendChild(dmg);
+            setTimeout(() => dmg.remove(), 550);
+
+            // Sparks / Particles
+            for (let i = 0; i < 6; i++) {
+                const p = document.createElement('div');
+                p.className = 'absolute w-2.5 h-2.5 rounded-full particle';
+                const colors = ['#facc15', '#f97316', '#ef4444', '#ffffff'];
+                p.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 40 + Math.random() * 70;
+                p.style.setProperty('--tw-translate-x', `${Math.cos(angle) * dist}px`);
+                p.style.setProperty('--tw-translate-y', `${Math.sin(angle) * dist}px`);
+                
+                p.style.left = `${x}px`;
+                p.style.top = `${y}px`;
+                fxContainer.appendChild(p);
+                setTimeout(() => p.remove(), 450);
+            }
+        }
+
+        // UI Updates
+        function updateUI() {
+            document.getElementById('score-display').innerText = score;
+            document.getElementById('combo-display').innerText = combo + 'x';
+
+            const damageLevel = Math.min(Math.floor(score / 20), 99);
+            document.getElementById('damage-level').innerText = `LV.${damageLevel}`;
+
+            const banner = document.getElementById('status-banner');
+            const aura = document.getElementById('aura-glow');
+            const stageText = document.getElementById('stage-text');
+
+            if (score >= 50) {
+                stageText.innerText = "HEAVY DAMAGED";
+                stageText.className = "text-red-500 font-black";
+            } else if (score >= 20) {
+                stageText.innerText = "BRUISED";
+                stageText.className = "text-orange-400 font-bold";
+            }
+
+            if (combo > 20) {
+                banner.innerText = "🔥 초광속 타격 중! 스트레스 완전 해소!";
+                banner.className = "mt-2 bg-red-600 text-yellow-300 border border-yellow-400 px-4 py-1 rounded-full text-xs font-black shadow-lg animate-pulse";
+                aura.style.opacity = "0.9";
+            } else if (combo > 10) {
+                banner.innerText = "⚡ 콤보 연타 폭발!";
+                banner.className = "mt-2 bg-orange-800 text-orange-200 border border-orange-500 px-4 py-1 rounded-full text-xs font-bold shadow";
+                aura.style.opacity = "0.6";
+            } else {
+                banner.innerText = "💥 클릭/터치하여 타격을 시작하세요!";
+                banner.className = "mt-2 bg-red-950/60 border border-red-800/60 px-4 py-1 rounded-full text-xs font-bold text-red-300 shadow";
+                aura.style.opacity = "0.3";
+            }
+        }
+
+        // Toggle Sound On/Off
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('sound-icon').innerText = soundEnabled ? '🔊' : '🔇';
+            document.getElementById('sound-btn').innerText = soundEnabled ? '🔊 사운드 ON' : '🔇 사운드 OFF';
+        }
+
+        // Toggle Help Modal
+        function toggleHelpModal() {
+            const modal = document.getElementById('help-modal');
+            modal.classList.toggle('hidden');
+        }
+
+        // Reset Game
+        function resetGame() {
+            score = 0;
+            combo = 0;
+            clearTimeout(comboTimeout);
+            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('target-image').src = customImages.normal;
+            document.getElementById('stage-text').innerText = "NORMAL";
+            document.getElementById('stage-text').className = "text-yellow-400 font-bold";
+            updateUI();
+        }
+
+        // Fallback placeholder image if initial photo is missing
+        function useFallbackImage() {
+            const img = document.getElementById('target-image');
+            img.src = "https://placehold.co/300x400/1e293b/ffffff?text=Target+Photo";
+        }
+    </script>
+</body>
+</html>
